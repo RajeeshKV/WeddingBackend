@@ -87,10 +87,9 @@ public sealed class AuthService(
     {
         var tokenHash = HashToken(request.RefreshToken);
         var token = await dbContext.RefreshTokens
-            .Include(x => x.AdminUser)
             .SingleOrDefaultAsync(x => x.TokenHash == tokenHash, cancellationToken);
 
-        if (token is null || !token.IsActive || token.AdminUser is null || !token.AdminUser.IsActive)
+        if (token is null || !token.IsActive)
         {
             throw new UnauthorizedAccessException("Refresh token is invalid or expired.");
         }
@@ -101,18 +100,24 @@ public sealed class AuthService(
             throw new UnauthorizedAccessException("Refresh token reuse detected.");
         }
 
+        var admin = await dbContext.AdminUsers.FindAsync(new object[] { token.AdminUserId }, cancellationToken);
+        if (admin is null || !admin.IsActive)
+        {
+            throw new UnauthorizedAccessException("Refresh token is invalid or expired.");
+        }
+
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
             token.RevokedAtUtc = DateTimeOffset.UtcNow;
             token.RevocationReason = "rotated";
-            var response = await IssueTokenPairAsync(token.AdminUser, cancellationToken, token.FamilyId);
+            var response = await IssueTokenPairAsync(admin, cancellationToken, token.FamilyId);
             var newTokenHash = HashToken(response.RefreshToken);
-            var newToken = await dbContext.RefreshTokens.SingleAsync(x => x.TokenHash == newTokenHash && x.UserId == token.UserId, cancellationToken);
+            var newToken = await dbContext.RefreshTokens.SingleAsync(x => x.TokenHash == newTokenHash && x.AdminUserId == token.AdminUserId, cancellationToken);
             token.ReplacedByTokenId = newToken.Id;
             await dbContext.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            return new TokenResponse(response.AccessToken, response.RefreshToken, response.ExpiresIn, token.AdminUser.SecurityVersion);
+            return new TokenResponse(response.AccessToken, response.RefreshToken, response.ExpiresIn, admin.SecurityVersion);
         }
         catch
         {
@@ -137,7 +142,7 @@ public sealed class AuthService(
     public async Task LogoutAllAsync(Guid adminUserId, CancellationToken cancellationToken)
     {
         var tokens = await dbContext.RefreshTokens
-            .Where(x => x.UserId == adminUserId && x.UserType == "Admin" && x.RevokedAtUtc == null)
+            .Where(x => x.AdminUserId == adminUserId && x.RevokedAtUtc == null)
             .ToListAsync(cancellationToken);
 
         foreach (var token in tokens)
@@ -259,9 +264,7 @@ public sealed class AuthService(
 
         dbContext.RefreshTokens.Add(new RefreshToken
         {
-            UserId = admin.Id,
-            UserType = "Admin",
-            AdminUser = admin,
+            AdminUserId = admin.Id,
             TokenHash = HashToken(refreshToken),
             FamilyId = fid,
             ExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(_jwt.RefreshTokenDays)
@@ -292,7 +295,7 @@ public sealed class AuthService(
 
     private async Task RevokeAllTokensAsync(Guid adminUserId, CancellationToken cancellationToken)
     {
-        var tokens = await dbContext.RefreshTokens.Where(x => x.UserId == adminUserId && x.UserType == "Admin" && x.RevokedAtUtc == null).ToListAsync(cancellationToken);
+        var tokens = await dbContext.RefreshTokens.Where(x => x.AdminUserId == adminUserId && x.RevokedAtUtc == null).ToListAsync(cancellationToken);
         foreach (var token in tokens)
         {
             token.RevokedAtUtc = DateTimeOffset.UtcNow;

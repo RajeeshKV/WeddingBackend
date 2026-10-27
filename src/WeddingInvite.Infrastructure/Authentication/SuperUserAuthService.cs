@@ -104,6 +104,12 @@ public sealed class SuperUserAuthService(
 
     public async Task LogoutAllAsync(Guid superUserId, CancellationToken cancellationToken)
     {
+        var tokens = await dbContext.RefreshTokens.Where(x => x.AdminUserId == superUserId && x.RevokedAtUtc == null).ToListAsync(cancellationToken);
+        foreach (var token in tokens)
+        {
+            token.RevokedAtUtc = DateTimeOffset.UtcNow;
+            token.RevocationReason = "logout_all";
+        }
         var su = await dbContext.SuperUsers.FindAsync(new object[] { superUserId }, cancellationToken);
         if (su != null)
         {
@@ -121,9 +127,7 @@ public sealed class SuperUserAuthService(
 
         dbContext.RefreshTokens.Add(new RefreshToken
         {
-            UserId = su.Id,
-            UserType = "SuperUser",
-            SuperUser = su,
+            AdminUserId = su.Id,
             TokenHash = HashToken(refreshToken),
             FamilyId = Guid.NewGuid(),
             ExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(_jwt.RefreshTokenDays)

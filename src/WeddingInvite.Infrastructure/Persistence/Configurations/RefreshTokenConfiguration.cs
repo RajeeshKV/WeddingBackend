@@ -14,10 +14,7 @@ public sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<Refresh
         builder.HasIndex(x => x.TokenHash);
         builder.Property(x => x.FamilyId).IsRequired();
         builder.HasIndex(x => x.FamilyId);
-        builder.Property(x => x.UserId).IsRequired();
-        builder.Property(x => x.UserType).IsRequired().HasMaxLength(20);
-        builder.HasOne(x => x.AdminUser).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade).IsRequired(false);
-        builder.HasOne(x => x.SuperUser).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade).IsRequired(false);
+        builder.Property(x => x.AdminUserId).IsRequired();
         builder.Property(x => x.CreatedAtUtc).IsRequired();
         builder.Property(x => x.ExpiresAtUtc).IsRequired();
     }
