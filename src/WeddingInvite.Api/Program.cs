@@ -119,6 +119,8 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.MapGet("/health/live", () => Results.Ok(new { status = "Alive" }));
+app.MapMethods("/health/live", new[] { "HEAD" }, () => Results.Ok());
+
 app.MapGet("/health/ready", async (WeddingInviteDbContext dbContext, IMemoryCache memoryCache, CancellationToken cancellationToken) =>
 {
     const string key = "health:db";
@@ -137,6 +139,64 @@ app.MapGet("/health/ready", async (WeddingInviteDbContext dbContext, IMemoryCach
         }
     }
     return Results.Ok(new { status = "Ready", database = "Connected" });
+});
+app.MapMethods("/health/ready", new[] { "HEAD" }, async (WeddingInviteDbContext dbContext, IMemoryCache memoryCache, CancellationToken cancellationToken) =>
+{
+    const string key = "health:db";
+    if (!memoryCache.TryGetValue(key, out _))
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(TimeSpan.FromSeconds(5));
+        try
+        {
+            await dbContext.Database.ExecuteSqlRawAsync("SELECT 1", cts.Token);
+            memoryCache.Set(key, true, TimeSpan.FromDays(7));
+        }
+        catch
+        {
+            return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+        }
+    }
+    return Results.Ok();
+});
+
+app.MapGet("/health", async (WeddingInviteDbContext dbContext, IMemoryCache memoryCache, CancellationToken cancellationToken) =>
+{
+    const string key = "health:db";
+    if (!memoryCache.TryGetValue(key, out _))
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(TimeSpan.FromSeconds(5));
+        try
+        {
+            await dbContext.Database.ExecuteSqlRawAsync("SELECT 1", cts.Token);
+            memoryCache.Set(key, true, TimeSpan.FromDays(7));
+        }
+        catch
+        {
+            return Results.Json(new { status = "NotReady", database = "Error" }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+    }
+    return Results.Ok(new { status = "Ready", database = "Connected" });
+});
+app.MapMethods("/health", new[] { "HEAD" }, async (WeddingInviteDbContext dbContext, IMemoryCache memoryCache, CancellationToken cancellationToken) =>
+{
+    const string key = "health:db";
+    if (!memoryCache.TryGetValue(key, out _))
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(TimeSpan.FromSeconds(5));
+        try
+        {
+            await dbContext.Database.ExecuteSqlRawAsync("SELECT 1", cts.Token);
+            memoryCache.Set(key, true, TimeSpan.FromDays(7));
+        }
+        catch
+        {
+            return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+        }
+    }
+    return Results.Ok();
 });
 
 app.Run();
