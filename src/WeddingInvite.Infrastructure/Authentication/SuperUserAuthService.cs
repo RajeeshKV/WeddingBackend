@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using WeddingInvite.Application.DTOs;
@@ -18,10 +19,12 @@ namespace WeddingInvite.Infrastructure.Authentication;
 public sealed class SuperUserAuthService(
     WeddingInviteDbContext dbContext,
     IOptions<JwtOptions> jwtOptions,
-    IHttpContextAccessor httpContextAccessor) : ISuperUserAuthService
+    IHttpContextAccessor httpContextAccessor,
+    IConfiguration configuration) : ISuperUserAuthService
 {
     private readonly JwtOptions _jwt = jwtOptions.Value;
     private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
+    private readonly IConfiguration _configuration = configuration;
 
     public async Task CreateSuperUserAsync(CreateSuRequest request, CancellationToken cancellationToken)
     {
@@ -35,7 +38,8 @@ public sealed class SuperUserAuthService(
             Username = request.Username.Trim(),
             Email = request.Email.Trim().ToLowerInvariant(),
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-            SecurityVersion = 1
+            SecurityVersion = 1,
+            IsActive = true
         };
 
         dbContext.SuperUsers.Add(su);
@@ -63,7 +67,13 @@ public sealed class SuperUserAuthService(
             var allowedByCors = await dbContext.AdminUserFrontendUrls.AnyAsync(x => x.IsActive && x.Url == normalized, cancellationToken);
             if (!allowedByCors)
             {
-                throw new UnauthorizedAccessException("Invalid username/email or password.");
+                var envOrigins = _configuration["SuperUser:AllowedOrigins"] ?? string.Empty;
+                var allowedEnv = envOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Any(o => o.TrimEnd('/') == normalized);
+                if (!allowedEnv)
+                {
+                    throw new UnauthorizedAccessException("Invalid username/email or password.");
+                }
             }
         }
         else
