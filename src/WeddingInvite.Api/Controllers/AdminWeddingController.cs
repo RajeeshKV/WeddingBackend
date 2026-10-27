@@ -18,8 +18,9 @@ public sealed class AdminWeddingController(
 {
     private Guid GetTenantId()
     {
-        var claim = User.FindFirst("tenantId") ?? User.FindFirst(ClaimTypes.NameIdentifier);
-        return Guid.Parse(claim!.Value);
+        var claim = User.FindFirst("tenantId") ?? User.FindFirst(ClaimTypes.NameIdentifier) ?? User.FindFirst("sub");
+        if (claim == null) throw new UnauthorizedAccessException("Missing tenant claim");
+        return Guid.Parse(claim.Value);
     }
 
     [HttpGet("weddings/{weddingId}/dashboard")]
@@ -27,7 +28,12 @@ public sealed class AdminWeddingController(
     {
         var tenantId = GetTenantId();
         var wedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId && w.AdminUserId == tenantId, cancellationToken);
-        if (wedding is null) return NotFound();
+        if (wedding is null)
+        {
+            var anyWedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId, cancellationToken);
+            if (anyWedding != null) return StatusCode(403);
+            return NotFound();
+        }
         var totalRsvps = await dbContext.Rsvps.CountAsync(r => r.WeddingId == weddingId, cancellationToken);
         var attending = await dbContext.Rsvps.CountAsync(r => r.WeddingId == weddingId && r.Status == RsvpStatus.Attending, cancellationToken);
         var notAttending = await dbContext.Rsvps.CountAsync(r => r.WeddingId == weddingId && r.Status == RsvpStatus.NotAttending, cancellationToken);
@@ -43,7 +49,12 @@ public sealed class AdminWeddingController(
     {
         var tenantId = GetTenantId();
         var wedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId && w.AdminUserId == tenantId, cancellationToken);
-        if (wedding is null) return NotFound();
+        if (wedding is null)
+        {
+            var anyWedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId, cancellationToken);
+            if (anyWedding != null) return StatusCode(403);
+            return NotFound();
+        }
         return Ok(new PublicWeddingConfigDto(wedding.Id, wedding.Name, wedding.Slug, wedding.EventDateUtc, wedding.Venue, wedding.Description, wedding.HeroImageUrl, wedding.RsvpEnabled, wedding.GuestUploadsEnabled));
     }
 
@@ -52,7 +63,12 @@ public sealed class AdminWeddingController(
     {
         var tenantId = GetTenantId();
         var wedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId && w.AdminUserId == tenantId, cancellationToken);
-        if (wedding is null) return NotFound();
+        if (wedding is null)
+        {
+            var anyWedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId, cancellationToken);
+            if (anyWedding != null) return StatusCode(403);
+            return NotFound();
+        }
         if (request.Name != null) wedding.Name = request.Name;
         if (request.Description != null) wedding.Description = request.Description;
         if (request.Venue != null) wedding.Venue = request.Venue;
