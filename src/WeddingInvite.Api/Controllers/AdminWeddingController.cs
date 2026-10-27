@@ -83,6 +83,32 @@ public sealed class AdminWeddingController(
         return NoContent();
     }
 
+    [HttpGet("weddings/{weddingId}/photos")]
+    public async Task<IActionResult> GetPhotos(Guid weddingId, CancellationToken cancellationToken)
+    {
+        var tenantId = GetTenantId();
+        var wedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId && w.AdminUserId == tenantId, cancellationToken);
+        if (wedding is null) return NotFound();
+        var photos = await dbContext.Photos
+            .Where(p => p.WeddingId == weddingId)
+            .OrderByDescending(p => p.UploadedAtUtc)
+            .Select(p => new AdminPhotoDto(p.Id, p.ImageUrl, p.ThumbnailUrl, p.UploadedByName, p.Caption, p.Status.ToString(), p.UploadedAtUtc, p.WeddingId))
+            .ToListAsync(cancellationToken);
+        return Ok(photos);
+    }
+
+    [HttpGet("photos")]
+    public async Task<IActionResult> GetAllPhotos(CancellationToken cancellationToken)
+    {
+        var tenantId = GetTenantId();
+        var photos = await dbContext.Photos
+            .Where(p => p.Wedding!.AdminUserId == tenantId)
+            .OrderByDescending(p => p.UploadedAtUtc)
+            .Select(p => new AdminPhotoDto(p.Id, p.ImageUrl, p.ThumbnailUrl, p.UploadedByName, p.Caption, p.Status.ToString(), p.UploadedAtUtc, p.WeddingId))
+            .ToListAsync(cancellationToken);
+        return Ok(photos);
+    }
+
     [HttpGet("photos/pending")]
     public async Task<IActionResult> GetPendingPhotos(CancellationToken cancellationToken)
     {
@@ -116,6 +142,18 @@ public sealed class AdminWeddingController(
         if (photo is null) return NotFound();
         photo.Status = PhotoStatus.Rejected;
         photo.ReviewedAtUtc = DateTimeOffset.UtcNow;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        cacheService.RemoveWedding(photo.WeddingId.ToString());
+        return NoContent();
+    }
+
+    [HttpDelete("photos/{photoId}")]
+    public async Task<IActionResult> DeletePhoto(Guid photoId, CancellationToken cancellationToken)
+    {
+        var tenantId = GetTenantId();
+        var photo = await dbContext.Photos.Include(p => p.Wedding).FirstOrDefaultAsync(p => p.Id == photoId && p.Wedding!.AdminUserId == tenantId, cancellationToken);
+        if (photo is null) return NotFound();
+        dbContext.Photos.Remove(photo);
         await dbContext.SaveChangesAsync(cancellationToken);
         cacheService.RemoveWedding(photo.WeddingId.ToString());
         return NoContent();
