@@ -224,8 +224,6 @@ namespace WeddingInvite.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TokenHash");
 
-                    b.HasIndex("UserId");
-
                     b.ToTable("refresh_tokens", (string)null);
                 });
 
@@ -451,23 +449,6 @@ namespace WeddingInvite.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Wedding");
-                });
-
-            modelBuilder.Entity("WeddingInvite.Domain.Entities.RefreshToken", b =>
-                {
-                    b.HasOne("WeddingInvite.Domain.Entities.AdminUser", "AdminUser")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
-                    b.HasOne("WeddingInvite.Domain.Entities.SuperUser", "SuperUser")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
-                    b.Navigation("AdminUser");
-
-                    b.Navigation("SuperUser");
                 });
 
             modelBuilder.Entity("WeddingInvite.Domain.Entities.Rsvp", b =>
