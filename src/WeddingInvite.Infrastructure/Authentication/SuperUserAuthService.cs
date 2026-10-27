@@ -5,6 +5,7 @@ using System.Text;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using WeddingInvite.Application.DTOs;
@@ -20,11 +21,13 @@ public sealed class SuperUserAuthService(
     WeddingInviteDbContext dbContext,
     IOptions<JwtOptions> jwtOptions,
     IHttpContextAccessor httpContextAccessor,
-    IConfiguration configuration) : ISuperUserAuthService
+    IConfiguration configuration,
+    ILogger<SuperUserAuthService> logger) : ISuperUserAuthService
 {
     private readonly JwtOptions _jwt = jwtOptions.Value;
     private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
     private readonly IConfiguration _configuration = configuration;
+    private readonly ILogger<SuperUserAuthService> _logger = logger;
 
     public async Task CreateSuperUserAsync(CreateSuRequest request, CancellationToken cancellationToken)
     {
@@ -60,6 +63,9 @@ public sealed class SuperUserAuthService(
 
         var httpContext = _httpContextAccessor.HttpContext;
         var origin = httpContext?.Request.Headers.Origin.ToString();
+        var referer = httpContext?.Request.Headers.Referer.ToString();
+
+        _logger.LogWarning("SU Login attempt - Origin: {Origin}, Referer: {Referer}, Host: {Host}", origin, referer, httpContext?.Request.Host.Value);
 
         if (!string.IsNullOrWhiteSpace(origin))
         {
@@ -74,6 +80,30 @@ public sealed class SuperUserAuthService(
                 {
                     throw new UnauthorizedAccessException("Invalid username/email or password.");
                 }
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(referer))
+        {
+            try
+            {
+                var uri = new Uri(referer);
+                var refOrigin = uri.Scheme + "://" + uri.Authority;
+                var normalized = refOrigin.TrimEnd('/');
+                var allowedByCors = await dbContext.AdminUserFrontendUrls.AnyAsync(x => x.IsActive && x.Url == normalized, cancellationToken);
+                if (!allowedByCors)
+                {
+                    var envOrigins = _configuration["SuperUser__AllowedOrigins"] ?? _configuration["SuperUser:AllowedOrigins"] ?? string.Empty;
+                    var allowedEnv = envOrigins.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Any(o => o.TrimEnd('/') == normalized);
+                    if (!allowedEnv)
+                    {
+                        throw new UnauthorizedAccessException("Invalid username/email or password.");
+                    }
+                }
+            }
+            catch
+            {
+                throw new UnauthorizedAccessException("Invalid username/email or password.");
             }
         }
         else
