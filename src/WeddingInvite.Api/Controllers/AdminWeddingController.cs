@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,11 +15,28 @@ namespace WeddingInvite.Api.Controllers;
 [Route("api/v1/admin")]
 public sealed class AdminWeddingController(
     WeddingInviteDbContext dbContext,
-    ICacheService cacheService) : ControllerBase
+    ICacheService cacheService,
+    IHttpContextAccessor httpContextAccessor) : ControllerBase
 {
     private Guid GetTenantId()
     {
-        var claim = User.FindFirst("tenantId") ?? User.FindFirst(ClaimTypes.NameIdentifier) ?? User.FindFirst("sub");
+        var httpContext = httpContextAccessor.HttpContext ?? HttpContext;
+        var authHeader = httpContext.Request.Headers.Authorization.ToString();
+        if (authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            var token = authHeader["Bearer ".Length..].Trim();
+            var handler = new JwtSecurityTokenHandler();
+            if (handler.CanReadToken(token))
+            {
+                var jwt = handler.ReadJwtToken(token);
+                var tenantClaim = jwt.Claims.FirstOrDefault(c => c.Type == "tenantId") ?? jwt.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier) ?? jwt.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Sub);
+                if (tenantClaim != null && Guid.TryParse(tenantClaim.Value, out var tenantIdFromToken))
+                {
+                    return tenantIdFromToken;
+                }
+            }
+        }
+        var claim = httpContext.User?.FindFirst("tenantId") ?? httpContext.User?.FindFirst(ClaimTypes.NameIdentifier) ?? httpContext.User?.FindFirst("sub") ?? httpContext.User?.FindFirst(JwtRegisteredClaimNames.Sub);
         if (claim == null) throw new UnauthorizedAccessException("Missing tenant claim");
         return Guid.Parse(claim.Value);
     }
