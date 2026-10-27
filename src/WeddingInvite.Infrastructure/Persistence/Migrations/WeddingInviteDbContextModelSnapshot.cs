@@ -36,6 +36,17 @@ namespace WeddingInvite.Infrastructure.Persistence.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("MustChangePassword")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("text");
@@ -60,6 +71,33 @@ namespace WeddingInvite.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("admin_users", (string)null);
+                });
+
+            modelBuilder.Entity("WeddingInvite.Domain.Entities.AdminUserFrontendUrl", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AdminUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AdminUserId", "Url");
+
+                    b.ToTable("admin_user_frontend_urls", (string)null);
                 });
 
             modelBuilder.Entity("WeddingInvite.Domain.Entities.PasswordResetOtp", b =>
@@ -230,10 +268,56 @@ namespace WeddingInvite.Infrastructure.Persistence.Migrations
                     b.ToTable("rsvps", (string)null);
                 });
 
+            modelBuilder.Entity("WeddingInvite.Domain.Entities.SuperUser", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("SecurityVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.HasIndex("Username")
+                        .IsUnique();
+
+                    b.ToTable("super_users", (string)null);
+                });
+
             modelBuilder.Entity("WeddingInvite.Domain.Entities.Wedding", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AdminUserId")
                         .HasColumnType("uuid");
 
                     b.Property<bool>("AutoApprovePhotos")
@@ -277,6 +361,8 @@ namespace WeddingInvite.Infrastructure.Persistence.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AdminUserId");
 
                     b.HasIndex("Slug")
                         .IsUnique();
@@ -329,6 +415,17 @@ namespace WeddingInvite.Infrastructure.Persistence.Migrations
                     b.ToTable("wedding_events", (string)null);
                 });
 
+            modelBuilder.Entity("WeddingInvite.Domain.Entities.AdminUserFrontendUrl", b =>
+                {
+                    b.HasOne("WeddingInvite.Domain.Entities.AdminUser", "AdminUser")
+                        .WithMany("FrontendUrls")
+                        .HasForeignKey("AdminUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AdminUser");
+                });
+
             modelBuilder.Entity("WeddingInvite.Domain.Entities.PasswordResetOtp", b =>
                 {
                     b.HasOne("WeddingInvite.Domain.Entities.AdminUser", "AdminUser")
@@ -373,6 +470,17 @@ namespace WeddingInvite.Infrastructure.Persistence.Migrations
                     b.Navigation("Wedding");
                 });
 
+            modelBuilder.Entity("WeddingInvite.Domain.Entities.Wedding", b =>
+                {
+                    b.HasOne("WeddingInvite.Domain.Entities.AdminUser", "AdminUser")
+                        .WithMany("Weddings")
+                        .HasForeignKey("AdminUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AdminUser");
+                });
+
             modelBuilder.Entity("WeddingInvite.Domain.Entities.WeddingEvent", b =>
                 {
                     b.HasOne("WeddingInvite.Domain.Entities.Wedding", "Wedding")
@@ -382,6 +490,13 @@ namespace WeddingInvite.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Wedding");
+                });
+
+            modelBuilder.Entity("WeddingInvite.Domain.Entities.AdminUser", b =>
+                {
+                    b.Navigation("FrontendUrls");
+
+                    b.Navigation("Weddings");
                 });
 
             modelBuilder.Entity("WeddingInvite.Domain.Entities.Wedding", b =>
