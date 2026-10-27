@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
+using WeddingInvite.Api.Helpers;
 using WeddingInvite.Application.DTOs;
 using WeddingInvite.Application.Interfaces;
 
@@ -30,7 +30,7 @@ public sealed class AdminAuthController(IAuthService authService) : ControllerBa
     [HttpPost("logout-all")]
     public async Task<IActionResult> LogoutAll(CancellationToken cancellationToken)
     {
-        var adminId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)!);
+        var adminId = JwtHelper.GetTenantId(HttpContext);
         await authService.LogoutAllAsync(adminId, cancellationToken);
         return NoContent();
     }
@@ -39,7 +39,7 @@ public sealed class AdminAuthController(IAuthService authService) : ControllerBa
     [HttpGet("me")]
     public async Task<AdminMeResponse> Me(CancellationToken cancellationToken)
     {
-        var adminId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)!);
+        var adminId = JwtHelper.GetTenantId(HttpContext);
         return await authService.GetMeAsync(adminId, cancellationToken);
     }
 
@@ -47,7 +47,7 @@ public sealed class AdminAuthController(IAuthService authService) : ControllerBa
     [HttpPost("change-password")]
     public async Task<IActionResult> ChangePassword(ChangePasswordRequest request, CancellationToken cancellationToken)
     {
-        var adminId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)!);
+        var adminId = JwtHelper.GetTenantId(HttpContext);
         await authService.ChangePasswordAsync(adminId, request, cancellationToken);
         return NoContent();
     }
