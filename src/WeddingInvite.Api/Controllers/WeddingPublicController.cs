@@ -108,11 +108,12 @@ public sealed class WeddingPublicController(
         var results = new List<object>();
         foreach (var file in files)
         {
+            var safeFileName = Uri.EscapeDataString(file.FileName.Replace(" ", "%20"));
             var photo = new Photo
             {
                 WeddingId = wedding.Id,
                 CloudinaryPublicId = Guid.NewGuid().ToString(),
-                ImageUrl = "https://example.com/" + file.FileName,
+                ImageUrl = $"https://example.com/{safeFileName}",
                 UploadedByName = uploadedByName,
                 Status = wedding.AutoApprovePhotos ? PhotoStatus.Approved : PhotoStatus.Pending
             };

@@ -9,11 +9,20 @@ public sealed class CacheService(IMemoryCache memoryCache) : ICacheService
     private readonly HashSet<string> _keys = new();
     private readonly object _lock = new();
 
-    public string GetWeddingPublicConfigKey(Guid weddingId) => $"wedding:{weddingId}:public-config";
-    public string GetWeddingGalleryKey(Guid weddingId, string queryHash) => $"wedding:{weddingId}:gallery:{queryHash}";
-    public string GetWeddingEventsKey(Guid weddingId) => $"wedding:{weddingId}:events";
-    public string GetWeddingSettingsKey(Guid weddingId) => $"wedding:{weddingId}:settings";
-    public string GetAdminDashboardKey(Guid weddingId, string queryHash) => $"wedding:{weddingId}:admin-dashboard:{queryHash}";
+    public string GetWeddingPublicConfigKey(Guid weddingId) => TrackKey($"wedding:{weddingId}:public-config");
+    public string GetWeddingGalleryKey(Guid weddingId, string queryHash) => TrackKey($"wedding:{weddingId}:gallery:{queryHash}");
+    public string GetWeddingEventsKey(Guid weddingId) => TrackKey($"wedding:{weddingId}:events");
+    public string GetWeddingSettingsKey(Guid weddingId) => TrackKey($"wedding:{weddingId}:settings");
+    public string GetAdminDashboardKey(Guid weddingId, string queryHash) => TrackKey($"wedding:{weddingId}:admin-dashboard:{queryHash}");
+
+    private string TrackKey(string key)
+    {
+        lock (_lock)
+        {
+            _keys.Add(key);
+        }
+        return key;
+    }
 
     public void Remove(string key)
     {
