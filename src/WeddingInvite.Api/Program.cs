@@ -65,9 +65,22 @@ builder.Services.AddCors(options =>
                 using var scope = builder.Services.BuildServiceProvider().CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<WeddingInviteDbContext>();
                 var cache = scope.ServiceProvider.GetRequiredService<IMemoryCache>();
+                var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
                 var key = $"cors:allowed:{normalized}";
                 if (cache.TryGetValue(key, out bool cachedAllowed)) return cachedAllowed;
                 var allowed = db.AdminUserFrontendUrls.Any(x => x.IsActive && x.Url == normalized);
+                if (!allowed)
+                {
+                    var envOrigins = config["SuperUser__AllowedOrigins"] ?? config["SuperUser:AllowedOrigins"] ?? string.Empty;
+                    allowed = envOrigins.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Any(o => o.TrimEnd('/') == normalized);
+                }
+                if (!allowed)
+                {
+                    var envOrigins = config["AdminUserFrontendUrls"] ?? string.Empty;
+                    allowed = envOrigins.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Any(o => o.TrimEnd('/') == normalized);
+                }
                 cache.Set(key, allowed, TimeSpan.FromMinutes(5));
                 return allowed;
             }
