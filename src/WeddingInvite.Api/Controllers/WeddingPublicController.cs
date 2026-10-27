@@ -1,10 +1,17 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using sib_api_v3_sdk.Api;
+using sib_api_v3_sdk.Client;
+using sib_api_v3_sdk.Model;
 using WeddingInvite.Application.DTOs;
 using WeddingInvite.Application.Interfaces;
+using WeddingInvite.Application.Options;
 using WeddingInvite.Domain.Entities;
 using WeddingInvite.Infrastructure.Persistence;
+using SystemTask = System.Threading.Tasks.Task;
 
 namespace WeddingInvite.Api.Controllers;
 
@@ -13,8 +20,12 @@ namespace WeddingInvite.Api.Controllers;
 public sealed class WeddingPublicController(
     WeddingInviteDbContext dbContext,
     IMemoryCache memoryCache,
-    ICacheService cacheService) : ControllerBase
+    ICacheService cacheService,
+    IOptions<BrevoOptions> brevoOptions,
+    ILogger<WeddingPublicController> logger) : ControllerBase
 {
+    private readonly BrevoOptions _brevo = brevoOptions.Value;
+
     [HttpGet("{slug}/config")]
     public async Task<IActionResult> GetConfig(string slug, CancellationToken cancellationToken)
     {
@@ -68,7 +79,7 @@ public sealed class WeddingPublicController(
     [HttpPost("{slug}/rsvp")]
     public async Task<IActionResult> SubmitRsvp(string slug, RsvpRequest request, CancellationToken cancellationToken)
     {
-        var wedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Slug == slug && w.IsPublished && w.RsvpEnabled, cancellationToken);
+        var wedding = await dbContext.Weddings.Include(w => w.AdminUser).FirstOrDefaultAsync(w => w.Slug == slug && w.IsPublished && w.RsvpEnabled, cancellationToken);
         if (wedding is null) return NotFound();
         var rsvp = new Rsvp
         {
@@ -83,6 +94,7 @@ public sealed class WeddingPublicController(
         dbContext.Rsvps.Add(rsvp);
         await dbContext.SaveChangesAsync(cancellationToken);
         cacheService.RemoveWedding(wedding.Id.ToString());
+        _ = NotifyAdminOfRsvpAsync(wedding, rsvp);
         return Ok(new RsvpDto(rsvp.Id, rsvp.GuestName, rsvp.Email, rsvp.Phone, rsvp.Status.ToString(), rsvp.GuestCount, rsvp.Message, rsvp.SubmittedAtUtc));
     }
 
@@ -93,7 +105,6 @@ public sealed class WeddingPublicController(
         if (wedding is null) return NotFound();
         if (files == null || files.Count == 0) return BadRequest("No files uploaded");
         
-        // This would use Cloudinary service - simplified for implementation
         var results = new List<object>();
         foreach (var file in files)
         {
@@ -111,5 +122,26 @@ public sealed class WeddingPublicController(
         await dbContext.SaveChangesAsync(cancellationToken);
         cacheService.RemoveWedding(wedding.Id.ToString());
         return Ok(results);
+    }
+
+    private async SystemTask NotifyAdminOfRsvpAsync(Wedding wedding, Rsvp rsvp)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_brevo.ApiKey) || string.IsNullOrWhiteSpace(wedding.AdminUser?.Email)) return;
+            Configuration.Default.AddApiKey("api-key", _brevo.ApiKey);
+            var apiInstance = new TransactionalEmailsApi();
+            var body = $"New RSVP for {wedding.Name}\n\nName: {rsvp.GuestName}\nEmail: {rsvp.Email}\nPhone: {rsvp.Phone}\nStatus: {rsvp.Status}\nGuests: {rsvp.GuestCount}\nMessage: {rsvp.Message}\n\nSubmitted: {rsvp.SubmittedAtUtc:u}";
+            var sendSmtpEmail = new SendSmtpEmail(
+                sender: new SendSmtpEmailSender(_brevo.SenderName, _brevo.SenderEmail),
+                to: new List<SendSmtpEmailTo> { new SendSmtpEmailTo(wedding.AdminUser.Email) },
+                subject: $"New RSVP - {wedding.Name}",
+                textContent: body);
+            await apiInstance.SendTransacEmailAsync(sendSmtpEmail);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to send RSVP notification email for wedding {WeddingId}", wedding.Id);
+        }
     }
 }
