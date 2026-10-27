@@ -67,8 +67,8 @@ public sealed class SuperUserAuthService(
             var allowedByCors = await dbContext.AdminUserFrontendUrls.AnyAsync(x => x.IsActive && x.Url == normalized, cancellationToken);
             if (!allowedByCors)
             {
-                var envOrigins = _configuration["SuperUser:AllowedOrigins"] ?? string.Empty;
-                var allowedEnv = envOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                var envOrigins = _configuration["SuperUser__AllowedOrigins"] ?? _configuration["SuperUser:AllowedOrigins"] ?? string.Empty;
+                var allowedEnv = envOrigins.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                     .Any(o => o.TrimEnd('/') == normalized);
                 if (!allowedEnv)
                 {
