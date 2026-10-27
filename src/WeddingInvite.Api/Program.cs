@@ -21,7 +21,10 @@ if (args.Contains("--migrate-only", StringComparer.OrdinalIgnoreCase))
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.DocInclusionPredicate((docName, apiDesc) => !apiDesc.ActionDescriptor.EndpointMetadata.Any(m => m is Microsoft.AspNetCore.Mvc.ApiExplorerSettingsAttribute a && a.IgnoreApi));
+});
 builder.Services.AddMemoryCache();
 builder.Services.AddInfrastructure(builder.Configuration);
 
@@ -64,26 +67,6 @@ app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-
-app.MapMethods("/health", new[] { "HEAD" }, async (WeddingInviteDbContext dbContext, IMemoryCache memoryCache, CancellationToken cancellationToken) =>
-{
-    const string key = "health:db";
-    if (!memoryCache.TryGetValue(key, out _))
-    {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(TimeSpan.FromSeconds(5));
-        try
-        {
-            await dbContext.Database.ExecuteSqlRawAsync("SELECT 1", cts.Token);
-            memoryCache.Set(key, true, TimeSpan.FromDays(7));
-        }
-        catch
-        {
-            return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
-        }
-    }
-    return Results.Ok();
-});
 
 app.MapGet("/health/live", () => Results.Ok(new { status = "Alive" }));
 app.MapGet("/health/ready", async (WeddingInviteDbContext dbContext, IMemoryCache memoryCache, CancellationToken cancellationToken) =>

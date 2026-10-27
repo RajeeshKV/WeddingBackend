@@ -7,6 +7,7 @@ namespace WeddingInvite.Api.Controllers;
 
 [ApiController]
 [Route("health")]
+[ApiExplorerSettings(IgnoreApi = true)]
 public sealed class HealthController(WeddingInviteDbContext dbContext, IMemoryCache memoryCache) : ControllerBase
 {
     [HttpHead]
