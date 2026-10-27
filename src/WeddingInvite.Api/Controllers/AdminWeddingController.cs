@@ -18,13 +18,18 @@ public sealed class AdminWeddingController(
 {
     private Guid GetTenantId() => JwtHelper.GetTenantId(HttpContext);
 
-    [HttpGet("weddings/{weddingId}/dashboard")]
-    public async Task<IActionResult> GetDashboard(Guid weddingId, CancellationToken cancellationToken)
+    private async Task<Wedding?> GetTenantWeddingAsync(CancellationToken cancellationToken)
     {
         var tenantId = GetTenantId();
-        var wedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId, cancellationToken);
+        return await dbContext.Weddings.FirstOrDefaultAsync(w => w.AdminUserId == tenantId, cancellationToken);
+    }
+
+    [HttpGet("wedding/dashboard")]
+    public async Task<IActionResult> GetDashboard(CancellationToken cancellationToken)
+    {
+        var wedding = await GetTenantWeddingAsync(cancellationToken);
         if (wedding is null) return NotFound();
-        if (wedding.AdminUserId != tenantId) return StatusCode(403);
+        var weddingId = wedding.Id;
         var totalRsvps = await dbContext.Rsvps.CountAsync(r => r.WeddingId == weddingId, cancellationToken);
         var attending = await dbContext.Rsvps.CountAsync(r => r.WeddingId == weddingId && r.Status == RsvpStatus.Attending, cancellationToken);
         var notAttending = await dbContext.Rsvps.CountAsync(r => r.WeddingId == weddingId && r.Status == RsvpStatus.NotAttending, cancellationToken);
@@ -35,23 +40,19 @@ public sealed class AdminWeddingController(
         return Ok(new AdminDashboardDto(totalRsvps, attending, notAttending, maybe, totalPhotos, pendingPhotos, approvedPhotos));
     }
 
-    [HttpGet("weddings/{weddingId}/config")]
-    public async Task<IActionResult> GetConfig(Guid weddingId, CancellationToken cancellationToken)
+    [HttpGet("wedding/config")]
+    public async Task<IActionResult> GetConfig(CancellationToken cancellationToken)
     {
-        var tenantId = GetTenantId();
-        var wedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId, cancellationToken);
+        var wedding = await GetTenantWeddingAsync(cancellationToken);
         if (wedding is null) return NotFound();
-        if (wedding.AdminUserId != tenantId) return StatusCode(403);
         return Ok(new PublicWeddingConfigDto(wedding.Id, wedding.Name, wedding.Slug, wedding.EventDateUtc, wedding.Venue, wedding.Description, wedding.HeroImageUrl, wedding.RsvpEnabled, wedding.GuestUploadsEnabled));
     }
 
-    [HttpPut("weddings/{weddingId}/config")]
-    public async Task<IActionResult> UpdateConfig(Guid weddingId, UpdateWeddingConfigRequest request, CancellationToken cancellationToken)
+    [HttpPut("wedding/config")]
+    public async Task<IActionResult> UpdateConfig(UpdateWeddingConfigRequest request, CancellationToken cancellationToken)
     {
-        var tenantId = GetTenantId();
-        var wedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId, cancellationToken);
+        var wedding = await GetTenantWeddingAsync(cancellationToken);
         if (wedding is null) return NotFound();
-        if (wedding.AdminUserId != tenantId) return StatusCode(403);
         if (request.Name != null) wedding.Name = request.Name;
         if (request.Description != null) wedding.Description = request.Description;
         if (request.Venue != null) wedding.Venue = request.Venue;
@@ -62,19 +63,17 @@ public sealed class AdminWeddingController(
         if (request.AutoApprovePhotos.HasValue) wedding.AutoApprovePhotos = request.AutoApprovePhotos.Value;
         wedding.UpdatedAtUtc = DateTimeOffset.UtcNow;
         await dbContext.SaveChangesAsync(cancellationToken);
-        cacheService.RemoveWedding(weddingId.ToString());
+        cacheService.RemoveWedding(wedding.Id.ToString());
         return NoContent();
     }
 
-    [HttpGet("weddings/{weddingId}/photos")]
-    public async Task<IActionResult> GetPhotos(Guid weddingId, CancellationToken cancellationToken)
+    [HttpGet("wedding/photos")]
+    public async Task<IActionResult> GetPhotos(CancellationToken cancellationToken)
     {
-        var tenantId = GetTenantId();
-        var wedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId, cancellationToken);
+        var wedding = await GetTenantWeddingAsync(cancellationToken);
         if (wedding is null) return NotFound();
-        if (wedding.AdminUserId != tenantId) return StatusCode(403);
         var photos = await dbContext.Photos
-            .Where(p => p.WeddingId == weddingId)
+            .Where(p => p.WeddingId == wedding.Id)
             .OrderByDescending(p => p.UploadedAtUtc)
             .Select(p => new AdminPhotoDto(p.Id, p.ImageUrl, p.ThumbnailUrl, p.UploadedByName, p.Caption, p.Status.ToString(), p.UploadedAtUtc, p.WeddingId))
             .ToListAsync(cancellationToken);
@@ -161,23 +160,37 @@ public sealed class AdminWeddingController(
         return NoContent();
     }
 
-    [HttpPost("weddings/{weddingId}/photos/auto-approve")]
-    public async Task<IActionResult> EnableAutoApprove(Guid weddingId, CancellationToken cancellationToken)
+    [HttpPost("wedding/photos/auto-approve")]
+    public async Task<IActionResult> EnableAutoApprove(CancellationToken cancellationToken)
     {
-        var tenantId = GetTenantId();
-        var wedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId, cancellationToken);
+        var wedding = await GetTenantWeddingAsync(cancellationToken);
         if (wedding is null) return NotFound();
-        if (wedding.AdminUserId != tenantId) return StatusCode(403);
         wedding.AutoApprovePhotos = true;
         wedding.UpdatedAtUtc = DateTimeOffset.UtcNow;
-        var pendingPhotos = await dbContext.Photos.Where(p => p.WeddingId == weddingId && p.Status == PhotoStatus.Pending).ToListAsync(cancellationToken);
+        var pendingPhotos = await dbContext.Photos.Where(p => p.WeddingId == wedding.Id && p.Status == PhotoStatus.Pending).ToListAsync(cancellationToken);
         foreach (var photo in pendingPhotos)
         {
             photo.Status = PhotoStatus.Approved;
             photo.ReviewedAtUtc = DateTimeOffset.UtcNow;
         }
         await dbContext.SaveChangesAsync(cancellationToken);
-        cacheService.RemoveWedding(weddingId.ToString());
+        cacheService.RemoveWedding(wedding.Id.ToString());
         return NoContent();
     }
+
+    // Backward compatibility
+    [HttpGet("weddings/{weddingId}/dashboard")]
+    public async Task<IActionResult> GetDashboardLegacy(Guid weddingId, CancellationToken cancellationToken) => await GetDashboard(cancellationToken);
+
+    [HttpGet("weddings/{weddingId}/config")]
+    public async Task<IActionResult> GetConfigLegacy(Guid weddingId, CancellationToken cancellationToken) => await GetConfig(cancellationToken);
+
+    [HttpPut("weddings/{weddingId}/config")]
+    public async Task<IActionResult> UpdateConfigLegacy(Guid weddingId, UpdateWeddingConfigRequest request, CancellationToken cancellationToken) => await UpdateConfig(request, cancellationToken);
+
+    [HttpGet("weddings/{weddingId}/photos")]
+    public async Task<IActionResult> GetPhotosLegacy(Guid weddingId, CancellationToken cancellationToken) => await GetPhotos(cancellationToken);
+
+    [HttpPost("weddings/{weddingId}/photos/auto-approve")]
+    public async Task<IActionResult> EnableAutoApproveLegacy(Guid weddingId, CancellationToken cancellationToken) => await EnableAutoApprove(cancellationToken);
 }
