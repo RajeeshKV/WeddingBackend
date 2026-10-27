@@ -121,7 +121,9 @@ public sealed class SuperUserAuthService(
 
         dbContext.RefreshTokens.Add(new RefreshToken
         {
-            AdminUserId = su.Id,
+            UserId = su.Id,
+            UserType = "SuperUser",
+            SuperUser = su,
             TokenHash = HashToken(refreshToken),
             FamilyId = Guid.NewGuid(),
             ExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(_jwt.RefreshTokenDays)

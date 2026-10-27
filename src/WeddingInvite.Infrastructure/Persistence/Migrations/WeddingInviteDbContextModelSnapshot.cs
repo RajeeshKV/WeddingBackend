@@ -184,9 +184,6 @@ namespace WeddingInvite.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("AdminUserId")
-                        .HasColumnType("uuid");
-
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -213,13 +210,21 @@ namespace WeddingInvite.Infrastructure.Persistence.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
-                    b.HasKey("Id");
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
 
-                    b.HasIndex("AdminUserId");
+                    b.Property<string>("UserType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
 
                     b.HasIndex("FamilyId");
 
                     b.HasIndex("TokenHash");
+
+                    b.HasIndex("UserId");
 
                     b.ToTable("refresh_tokens", (string)null);
                 });
@@ -452,11 +457,17 @@ namespace WeddingInvite.Infrastructure.Persistence.Migrations
                 {
                     b.HasOne("WeddingInvite.Domain.Entities.AdminUser", "AdminUser")
                         .WithMany()
-                        .HasForeignKey("AdminUserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("WeddingInvite.Domain.Entities.SuperUser", "SuperUser")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("AdminUser");
+
+                    b.Navigation("SuperUser");
                 });
 
             modelBuilder.Entity("WeddingInvite.Domain.Entities.Rsvp", b =>
