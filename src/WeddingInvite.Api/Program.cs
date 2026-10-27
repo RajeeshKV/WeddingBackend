@@ -3,6 +3,7 @@ using WeddingInvite.Api.Middleware;
 using WeddingInvite.Infrastructure;
 using WeddingInvite.Infrastructure.Persistence;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,6 +25,29 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.DocInclusionPredicate((docName, apiDesc) => !apiDesc.ActionDescriptor.EndpointMetadata.Any(m => m is Microsoft.AspNetCore.Mvc.ApiExplorerSettingsAttribute a && a.IgnoreApi));
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Enter JWT token"
+    });
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
 });
 builder.Services.AddMemoryCache();
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -69,7 +93,6 @@ using (var scope = app.Services.CreateScope())
     }
     catch
     {
-        // continue
     }
 }
 
