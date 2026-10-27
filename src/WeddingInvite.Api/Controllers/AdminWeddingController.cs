@@ -1,8 +1,7 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using WeddingInvite.Api.Helpers;
 using WeddingInvite.Application.DTOs;
 using WeddingInvite.Application.Interfaces;
 using WeddingInvite.Domain.Entities;
@@ -15,31 +14,9 @@ namespace WeddingInvite.Api.Controllers;
 [Route("api/v1/admin")]
 public sealed class AdminWeddingController(
     WeddingInviteDbContext dbContext,
-    ICacheService cacheService,
-    IHttpContextAccessor httpContextAccessor) : ControllerBase
+    ICacheService cacheService) : ControllerBase
 {
-    private Guid GetTenantId()
-    {
-        var httpContext = httpContextAccessor.HttpContext ?? HttpContext;
-        var authHeader = httpContext.Request.Headers.Authorization.ToString();
-        if (authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-        {
-            var token = authHeader["Bearer ".Length..].Trim();
-            var handler = new JwtSecurityTokenHandler();
-            if (handler.CanReadToken(token))
-            {
-                var jwt = handler.ReadJwtToken(token);
-                var tenantClaim = jwt.Claims.FirstOrDefault(c => c.Type == "tenantId") ?? jwt.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier) ?? jwt.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Sub);
-                if (tenantClaim != null && Guid.TryParse(tenantClaim.Value, out var tenantIdFromToken))
-                {
-                    return tenantIdFromToken;
-                }
-            }
-        }
-        var claim = httpContext.User?.FindFirst("tenantId") ?? httpContext.User?.FindFirst(ClaimTypes.NameIdentifier) ?? httpContext.User?.FindFirst("sub") ?? httpContext.User?.FindFirst(JwtRegisteredClaimNames.Sub);
-        if (claim == null) throw new UnauthorizedAccessException("Missing tenant claim");
-        return Guid.Parse(claim.Value);
-    }
+    private Guid GetTenantId() => JwtHelper.GetTenantId(HttpContext);
 
     [HttpGet("weddings/{weddingId}/dashboard")]
     public async Task<IActionResult> GetDashboard(Guid weddingId, CancellationToken cancellationToken)
