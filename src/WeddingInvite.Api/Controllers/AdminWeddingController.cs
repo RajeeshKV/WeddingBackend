@@ -27,13 +27,9 @@ public sealed class AdminWeddingController(
     public async Task<IActionResult> GetDashboard(Guid weddingId, CancellationToken cancellationToken)
     {
         var tenantId = GetTenantId();
-        var wedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId && w.AdminUserId == tenantId, cancellationToken);
-        if (wedding is null)
-        {
-            var anyWedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId, cancellationToken);
-            if (anyWedding != null) return StatusCode(403);
-            return NotFound();
-        }
+        var wedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId, cancellationToken);
+        if (wedding is null) return NotFound();
+        if (wedding.AdminUserId != tenantId) return StatusCode(403);
         var totalRsvps = await dbContext.Rsvps.CountAsync(r => r.WeddingId == weddingId, cancellationToken);
         var attending = await dbContext.Rsvps.CountAsync(r => r.WeddingId == weddingId && r.Status == RsvpStatus.Attending, cancellationToken);
         var notAttending = await dbContext.Rsvps.CountAsync(r => r.WeddingId == weddingId && r.Status == RsvpStatus.NotAttending, cancellationToken);
@@ -48,13 +44,9 @@ public sealed class AdminWeddingController(
     public async Task<IActionResult> GetConfig(Guid weddingId, CancellationToken cancellationToken)
     {
         var tenantId = GetTenantId();
-        var wedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId && w.AdminUserId == tenantId, cancellationToken);
-        if (wedding is null)
-        {
-            var anyWedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId, cancellationToken);
-            if (anyWedding != null) return StatusCode(403);
-            return NotFound();
-        }
+        var wedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId, cancellationToken);
+        if (wedding is null) return NotFound();
+        if (wedding.AdminUserId != tenantId) return StatusCode(403);
         return Ok(new PublicWeddingConfigDto(wedding.Id, wedding.Name, wedding.Slug, wedding.EventDateUtc, wedding.Venue, wedding.Description, wedding.HeroImageUrl, wedding.RsvpEnabled, wedding.GuestUploadsEnabled));
     }
 
@@ -62,13 +54,9 @@ public sealed class AdminWeddingController(
     public async Task<IActionResult> UpdateConfig(Guid weddingId, UpdateWeddingConfigRequest request, CancellationToken cancellationToken)
     {
         var tenantId = GetTenantId();
-        var wedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId && w.AdminUserId == tenantId, cancellationToken);
-        if (wedding is null)
-        {
-            var anyWedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId, cancellationToken);
-            if (anyWedding != null) return StatusCode(403);
-            return NotFound();
-        }
+        var wedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId, cancellationToken);
+        if (wedding is null) return NotFound();
+        if (wedding.AdminUserId != tenantId) return StatusCode(403);
         if (request.Name != null) wedding.Name = request.Name;
         if (request.Description != null) wedding.Description = request.Description;
         if (request.Venue != null) wedding.Venue = request.Venue;
@@ -87,8 +75,9 @@ public sealed class AdminWeddingController(
     public async Task<IActionResult> GetPhotos(Guid weddingId, CancellationToken cancellationToken)
     {
         var tenantId = GetTenantId();
-        var wedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId && w.AdminUserId == tenantId, cancellationToken);
+        var wedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId, cancellationToken);
         if (wedding is null) return NotFound();
+        if (wedding.AdminUserId != tenantId) return StatusCode(403);
         var photos = await dbContext.Photos
             .Where(p => p.WeddingId == weddingId)
             .OrderByDescending(p => p.UploadedAtUtc)
@@ -181,8 +170,9 @@ public sealed class AdminWeddingController(
     public async Task<IActionResult> EnableAutoApprove(Guid weddingId, CancellationToken cancellationToken)
     {
         var tenantId = GetTenantId();
-        var wedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId && w.AdminUserId == tenantId, cancellationToken);
+        var wedding = await dbContext.Weddings.FirstOrDefaultAsync(w => w.Id == weddingId, cancellationToken);
         if (wedding is null) return NotFound();
+        if (wedding.AdminUserId != tenantId) return StatusCode(403);
         wedding.AutoApprovePhotos = true;
         wedding.UpdatedAtUtc = DateTimeOffset.UtcNow;
         var pendingPhotos = await dbContext.Photos.Where(p => p.WeddingId == weddingId && p.Status == PhotoStatus.Pending).ToListAsync(cancellationToken);
