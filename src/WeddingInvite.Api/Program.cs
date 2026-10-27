@@ -36,14 +36,21 @@ builder.Services.AddCors(options =>
         {
             if (string.IsNullOrWhiteSpace(origin)) return false;
             var normalized = origin.TrimEnd('/');
-            using var scope = builder.Services.BuildServiceProvider().CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<WeddingInviteDbContext>();
-            var cache = scope.ServiceProvider.GetRequiredService<IMemoryCache>();
-            var key = $"cors:allowed:{normalized}";
-            if (cache.TryGetValue(key, out bool cachedAllowed)) return cachedAllowed;
-            var allowed = db.AdminUserFrontendUrls.Any(x => x.IsActive && x.Url == normalized);
-            cache.Set(key, allowed, TimeSpan.FromMinutes(5));
-            return allowed;
+            try
+            {
+                using var scope = builder.Services.BuildServiceProvider().CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<WeddingInviteDbContext>();
+                var cache = scope.ServiceProvider.GetRequiredService<IMemoryCache>();
+                var key = $"cors:allowed:{normalized}";
+                if (cache.TryGetValue(key, out bool cachedAllowed)) return cachedAllowed;
+                var allowed = db.AdminUserFrontendUrls.Any(x => x.IsActive && x.Url == normalized);
+                cache.Set(key, allowed, TimeSpan.FromMinutes(5));
+                return allowed;
+            }
+            catch
+            {
+                return false;
+            }
         })
         .AllowAnyHeader()
         .AllowAnyMethod()
@@ -56,7 +63,14 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<WeddingInviteDbContext>();
-    await dbContext.Database.MigrateAsync();
+    try
+    {
+        await dbContext.Database.MigrateAsync();
+    }
+    catch
+    {
+        // continue
+    }
 }
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
