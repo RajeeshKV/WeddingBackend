@@ -2,8 +2,8 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 COPY . .
-RUN dotnet restore "src/WeddingInvite.sln"
-RUN dotnet build "src/WeddingInvite.sln" -c Release --no-restore
+RUN dotnet restore "src/WeddingInviteBackend.sln"
+RUN dotnet build "src/WeddingInviteBackend.sln" -c Release --no-restore
 
 # Publish stage
 FROM build AS publish
