@@ -11,6 +11,7 @@ using WeddingInvite.Application.Interfaces;
 using WeddingInvite.Application.Options;
 using WeddingInvite.Domain.Entities;
 using WeddingInvite.Infrastructure.Persistence;
+using WeddingInvite.Infrastructure.Services;
 using SystemTask = System.Threading.Tasks.Task;
 
 namespace WeddingInvite.Api.Controllers;
@@ -22,7 +23,8 @@ public sealed class WeddingPublicController(
     IMemoryCache memoryCache,
     ICacheService cacheService,
     IOptions<BrevoOptions> brevoOptions,
-    ILogger<WeddingPublicController> logger) : ControllerBase
+    ILogger<WeddingPublicController> logger,
+    ICloudinaryService cloudinaryService) : ControllerBase
 {
     private readonly BrevoOptions _brevo = brevoOptions.Value;
 
@@ -108,17 +110,18 @@ public sealed class WeddingPublicController(
         var results = new List<object>();
         foreach (var file in files)
         {
-            var safeFileName = Uri.EscapeDataString(file.FileName.Replace(" ", "%20"));
+            var (url, publicId) = await cloudinaryService.UploadAsync(file, cancellationToken);
             var photo = new Photo
             {
                 WeddingId = wedding.Id,
-                CloudinaryPublicId = Guid.NewGuid().ToString(),
-                ImageUrl = $"https://example.com/{safeFileName}",
+                CloudinaryPublicId = publicId,
+                ImageUrl = url,
+                ThumbnailUrl = url,
                 UploadedByName = uploadedByName,
                 Status = wedding.AutoApprovePhotos ? PhotoStatus.Approved : PhotoStatus.Pending
             };
             dbContext.Photos.Add(photo);
-            results.Add(new { id = photo.Id, status = photo.Status.ToString() });
+            results.Add(new { id = photo.Id, status = photo.Status.ToString(), imageUrl = url });
         }
         await dbContext.SaveChangesAsync(cancellationToken);
         cacheService.RemoveWedding(wedding.Id.ToString());
