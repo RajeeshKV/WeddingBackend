@@ -40,6 +40,49 @@ public sealed class AdminWeddingController(
         return Ok(new AdminDashboardDto(totalRsvps, attending, notAttending, maybe, totalPhotos, pendingPhotos, approvedPhotos));
     }
 
+    [HttpGet("wedding/rsvps")]
+    public async Task<IActionResult> GetRsvps([FromQuery] int page = 1, [FromQuery] int pageSize = 50, [FromQuery] string? status = null, CancellationToken cancellationToken = default)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 50;
+        if (pageSize > 200) pageSize = 200;
+        var wedding = await GetTenantWeddingAsync(cancellationToken);
+        if (wedding is null) return NotFound();
+        var query = dbContext.Rsvps.Where(r => r.WeddingId == wedding.Id);
+        if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<RsvpStatus>(status, true, out var parsedStatus))
+        {
+            query = query.Where(r => r.Status == parsedStatus);
+        }
+        query = query.OrderByDescending(r => r.SubmittedAtUtc);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query.Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(r => new AdminRsvpDto(r.Id, r.WeddingId, r.GuestName, r.Email, r.Phone, r.Status.ToString(), r.GuestCount, r.Message, r.SubmittedAtUtc))
+            .ToListAsync(cancellationToken);
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+        return Ok(new PagedResult<AdminRsvpDto>(items, page, pageSize, totalCount, totalPages));
+    }
+
+    [HttpGet("rsvps")]
+    public async Task<IActionResult> GetAllRsvps([FromQuery] int page = 1, [FromQuery] int pageSize = 50, [FromQuery] string? status = null, CancellationToken cancellationToken = default)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 50;
+        if (pageSize > 200) pageSize = 200;
+        var tenantId = GetTenantId();
+        var query = dbContext.Rsvps.Where(r => r.Wedding!.AdminUserId == tenantId);
+        if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<RsvpStatus>(status, true, out var parsedStatus))
+        {
+            query = query.Where(r => r.Status == parsedStatus);
+        }
+        query = query.OrderByDescending(r => r.SubmittedAtUtc);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query.Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(r => new AdminRsvpDto(r.Id, r.WeddingId, r.GuestName, r.Email, r.Phone, r.Status.ToString(), r.GuestCount, r.Message, r.SubmittedAtUtc))
+            .ToListAsync(cancellationToken);
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+        return Ok(new PagedResult<AdminRsvpDto>(items, page, pageSize, totalCount, totalPages));
+    }
+
     [HttpGet("wedding/config")]
     public async Task<IActionResult> GetConfig(CancellationToken cancellationToken)
     {
@@ -193,6 +236,9 @@ public sealed class AdminWeddingController(
     // Backward compatibility
     [HttpGet("weddings/{weddingId}/dashboard")]
     public async Task<IActionResult> GetDashboardLegacy(Guid weddingId, CancellationToken cancellationToken) => await GetDashboard(cancellationToken);
+
+    [HttpGet("weddings/{weddingId}/rsvps")]
+    public async Task<IActionResult> GetRsvpsLegacy(Guid weddingId, [FromQuery] int page = 1, [FromQuery] int pageSize = 50, [FromQuery] string? status = null, CancellationToken cancellationToken = default) => await GetRsvps(page, pageSize, status, cancellationToken);
 
     [HttpGet("weddings/{weddingId}/config")]
     public async Task<IActionResult> GetConfigLegacy(Guid weddingId, CancellationToken cancellationToken) => await GetConfig(cancellationToken);

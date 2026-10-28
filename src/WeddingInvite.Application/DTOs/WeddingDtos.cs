@@ -6,6 +6,7 @@ public sealed record PhotoDto(Guid Id, string ImageUrl, string? ThumbnailUrl, st
 public sealed record AdminPhotoDto(Guid Id, string ImageUrl, string? ThumbnailUrl, string? UploadedByName, string? Caption, string Status, DateTimeOffset UploadedAtUtc, Guid WeddingId);
 public sealed record RsvpRequest(string GuestName, string? Email, string? Phone, string Status, int GuestCount, string? Message);
 public sealed record RsvpDto(Guid Id, string GuestName, string? Email, string? Phone, string Status, int GuestCount, string? Message, DateTimeOffset SubmittedAtUtc);
+public sealed record AdminRsvpDto(Guid Id, Guid WeddingId, string GuestName, string? Email, string? Phone, string Status, int GuestCount, string? Message, DateTimeOffset SubmittedAtUtc);
 public sealed record AdminDashboardDto(int TotalRsvps, int AttendingCount, int NotAttendingCount, int MaybeCount, int TotalPhotos, int PendingPhotos, int ApprovedPhotos);
 public sealed record UpdateWeddingConfigRequest(string? Name, string? Description, string? Venue, DateTimeOffset? EventDateUtc, string? HeroImageUrl, bool? RsvpEnabled, bool? GuestUploadsEnabled, bool? AutoApprovePhotos);
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, int TotalCount, int TotalPages);
