@@ -179,24 +179,6 @@ app.MapGet("/health", async (WeddingInviteDbContext dbContext, IMemoryCache memo
     }
     return Results.Ok(new { status = "Ready", database = "Connected" });
 });
-app.MapMethods("/health", new[] { "HEAD" }, async (WeddingInviteDbContext dbContext, IMemoryCache memoryCache, CancellationToken cancellationToken) =>
-{
-    const string key = "health:db";
-    if (!memoryCache.TryGetValue(key, out _))
-    {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(TimeSpan.FromSeconds(5));
-        try
-        {
-            await dbContext.Database.ExecuteSqlRawAsync("SELECT 1", cts.Token);
-            memoryCache.Set(key, true, TimeSpan.FromDays(7));
-        }
-        catch
-        {
-            return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
-        }
-    }
-    return Results.Ok();
-});
+app.MapMethods("/health", new[] { "HEAD" }, () => Results.StatusCode(StatusCodes.Status200OK));
 
 app.Run();
