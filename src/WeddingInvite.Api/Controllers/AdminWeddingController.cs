@@ -68,40 +68,52 @@ public sealed class AdminWeddingController(
     }
 
     [HttpGet("wedding/photos")]
-    public async Task<IActionResult> GetPhotos(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetPhotos([FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken cancellationToken = default)
     {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 20;
+        if (pageSize > 100) pageSize = 100;
         var wedding = await GetTenantWeddingAsync(cancellationToken);
         if (wedding is null) return NotFound();
-        var photos = await dbContext.Photos
-            .Where(p => p.WeddingId == wedding.Id)
-            .OrderByDescending(p => p.UploadedAtUtc)
+        var query = dbContext.Photos.Where(p => p.WeddingId == wedding.Id).OrderByDescending(p => p.UploadedAtUtc);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query.Skip((page - 1) * pageSize).Take(pageSize)
             .Select(p => new AdminPhotoDto(p.Id, p.ImageUrl, p.ThumbnailUrl, p.UploadedByName, p.Caption, p.Status.ToString(), p.UploadedAtUtc, p.WeddingId))
             .ToListAsync(cancellationToken);
-        return Ok(photos);
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+        return Ok(new PagedResult<AdminPhotoDto>(items, page, pageSize, totalCount, totalPages));
     }
 
     [HttpGet("photos")]
-    public async Task<IActionResult> GetAllPhotos(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetAllPhotos([FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken cancellationToken = default)
     {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 20;
+        if (pageSize > 100) pageSize = 100;
         var tenantId = GetTenantId();
-        var photos = await dbContext.Photos
-            .Where(p => p.Wedding!.AdminUserId == tenantId)
-            .OrderByDescending(p => p.UploadedAtUtc)
+        var query = dbContext.Photos.Where(p => p.Wedding!.AdminUserId == tenantId).OrderByDescending(p => p.UploadedAtUtc);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query.Skip((page - 1) * pageSize).Take(pageSize)
             .Select(p => new AdminPhotoDto(p.Id, p.ImageUrl, p.ThumbnailUrl, p.UploadedByName, p.Caption, p.Status.ToString(), p.UploadedAtUtc, p.WeddingId))
             .ToListAsync(cancellationToken);
-        return Ok(photos);
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+        return Ok(new PagedResult<AdminPhotoDto>(items, page, pageSize, totalCount, totalPages));
     }
 
     [HttpGet("photos/pending")]
-    public async Task<IActionResult> GetPendingPhotos(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetPendingPhotos([FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken cancellationToken = default)
     {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 20;
+        if (pageSize > 100) pageSize = 100;
         var tenantId = GetTenantId();
-        var photos = await dbContext.Photos
-            .Where(p => p.Status == PhotoStatus.Pending && p.Wedding!.AdminUserId == tenantId)
-            .OrderBy(p => p.UploadedAtUtc)
+        var query = dbContext.Photos.Where(p => p.Status == PhotoStatus.Pending && p.Wedding!.AdminUserId == tenantId).OrderBy(p => p.UploadedAtUtc);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query.Skip((page - 1) * pageSize).Take(pageSize)
             .Select(p => new AdminPhotoDto(p.Id, p.ImageUrl, p.ThumbnailUrl, p.UploadedByName, p.Caption, p.Status.ToString(), p.UploadedAtUtc, p.WeddingId))
             .ToListAsync(cancellationToken);
-        return Ok(photos);
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+        return Ok(new PagedResult<AdminPhotoDto>(items, page, pageSize, totalCount, totalPages));
     }
 
     [HttpPost("photos/{photoId}/approve")]
@@ -189,7 +201,7 @@ public sealed class AdminWeddingController(
     public async Task<IActionResult> UpdateConfigLegacy(Guid weddingId, UpdateWeddingConfigRequest request, CancellationToken cancellationToken) => await UpdateConfig(request, cancellationToken);
 
     [HttpGet("weddings/{weddingId}/photos")]
-    public async Task<IActionResult> GetPhotosLegacy(Guid weddingId, CancellationToken cancellationToken) => await GetPhotos(cancellationToken);
+    public async Task<IActionResult> GetPhotosLegacy(Guid weddingId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken cancellationToken = default) => await GetPhotos(page, pageSize, cancellationToken);
 
     [HttpPost("weddings/{weddingId}/photos/auto-approve")]
     public async Task<IActionResult> EnableAutoApproveLegacy(Guid weddingId, CancellationToken cancellationToken) => await EnableAutoApprove(cancellationToken);

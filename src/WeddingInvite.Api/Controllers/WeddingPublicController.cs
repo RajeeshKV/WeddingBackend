@@ -43,39 +43,37 @@ public sealed class WeddingPublicController(
     }
 
     [HttpGet("{slug}/events")]
-    public async Task<IActionResult> GetEvents(string slug, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetEvents(string slug, [FromQuery] int page = 1, [FromQuery] int pageSize = 50, CancellationToken cancellationToken = default)
     {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 50;
+        if (pageSize > 100) pageSize = 100;
         var wedding = await dbContext.Weddings.AsNoTracking().FirstOrDefaultAsync(w => w.Slug == slug && w.IsPublished, cancellationToken);
         if (wedding is null) return NotFound();
-        var key = cacheService.GetWeddingEventsKey(wedding.Id);
-        if (!memoryCache.TryGetValue(key, out List<WeddingEventDto>? cached))
-        {
-            cached = await dbContext.WeddingEvents
-                .Where(e => e.WeddingId == wedding.Id)
-                .OrderBy(e => e.DisplayOrder)
-                .Select(e => new WeddingEventDto(e.Id, e.Name, e.Description, e.StartTimeUtc, e.EndTimeUtc, e.Venue, e.Address, e.DisplayOrder))
-                .ToListAsync(cancellationToken);
-            memoryCache.Set(key, cached, TimeSpan.FromMinutes(10));
-        }
-        return Ok(cached);
+        var query = dbContext.WeddingEvents.Where(e => e.WeddingId == wedding.Id).OrderBy(e => e.DisplayOrder);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query.Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(e => new WeddingEventDto(e.Id, e.Name, e.Description, e.StartTimeUtc, e.EndTimeUtc, e.Venue, e.Address, e.DisplayOrder))
+            .ToListAsync(cancellationToken);
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+        return Ok(new PagedResult<WeddingEventDto>(items, page, pageSize, totalCount, totalPages));
     }
 
     [HttpGet("{slug}/gallery")]
-    public async Task<IActionResult> GetGallery(string slug, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetGallery(string slug, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken cancellationToken = default)
     {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 20;
+        if (pageSize > 50) pageSize = 50;
         var wedding = await dbContext.Weddings.AsNoTracking().FirstOrDefaultAsync(w => w.Slug == slug && w.IsPublished, cancellationToken);
         if (wedding is null) return NotFound();
-        var key = cacheService.GetWeddingGalleryKey(wedding.Id, "public");
-        if (!memoryCache.TryGetValue(key, out List<PhotoDto>? cached))
-        {
-            cached = await dbContext.Photos
-                .Where(p => p.WeddingId == wedding.Id && p.Status == PhotoStatus.Approved)
-                .OrderByDescending(p => p.UploadedAtUtc)
-                .Select(p => new PhotoDto(p.Id, p.ImageUrl, p.ThumbnailUrl, p.UploadedByName, p.Caption, p.Status.ToString(), p.UploadedAtUtc))
-                .ToListAsync(cancellationToken);
-            memoryCache.Set(key, cached, TimeSpan.FromMinutes(5));
-        }
-        return Ok(cached);
+        var query = dbContext.Photos.Where(p => p.WeddingId == wedding.Id && p.Status == PhotoStatus.Approved).OrderByDescending(p => p.UploadedAtUtc);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query.Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(p => new PhotoDto(p.Id, p.ImageUrl, p.ThumbnailUrl, p.UploadedByName, p.Caption, p.Status.ToString(), p.UploadedAtUtc))
+            .ToListAsync(cancellationToken);
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+        return Ok(new PagedResult<PhotoDto>(items, page, pageSize, totalCount, totalPages));
     }
 
     [HttpPost("{slug}/rsvp")]
